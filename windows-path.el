@@ -1,12 +1,15 @@
-;;; windows-path.el -- Teach cygwin EMACS about windows styles path
+;;; windows-path.el -- Teach cygwin/WSL EMACS about Windows file system
 
 ;; Copyright (C) 2009 Victor Ren
-;;              
+;;
 
 ;; Author: Victor Ren <victorhge@gmail.com>
-;; Keywords: windows, mount, cygwin, path
+;; Keywords: Windows, mount, cygwin, path
+;; Version:0.1
+;; X-URL: https://www.emacswiki.org/emacs/windows-path.el
+;;        https://github.com/victorhge/windows-path
 
-;; This file is *NOT* (yet?) part of GNU Emacs.
+;; This file is *NOT* (yet) part of GNU Emacs.
 ;;
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -26,8 +29,9 @@
 ;;; Commentary:
 
 ;; This package lets you use windows-style filenames like "c:/path/file" or
-;; "c:\path\file" in cygwin emacs.  There is a cygwin-mount.el let you use
-;; cygwin style path in native Windows Emacs. This package is a opposite of it.
+;; "c:\path\file" in cygwin Emacs, or Emacs runing on WSL (Windows Subsystem for
+;; Linux).  There is a cygwin-mount.el let you use Unix style path in native
+;; Windows Emacs.  This package is a opposite of it.
 
 ;;; Installation:
 
@@ -37,16 +41,17 @@
 
 ;;; Compatibility
 
-;; The package is only tested with Cygwin Emacs 23.1.
+;; The package is only tested with Cygwin Emacs 24.3.
 
 ;; How it works:
-;; basically push some functions onto file-name-handler-alist.
+;; Basically some hook functions are put onto file-name-handler-alist.
 ;; They detect filenames expressed in Windows style, and translate
-;; those names into cygwin style.
+;; those names into Unix style.
 
 ;;; Code:
+(if (eq system-type 'cygwin)
+    (require 'cygwin-mount))
 
-(require 'cygwin-mount)
 (defconst windows-path-version "0.1")
 
 (defgroup windows-path nil
@@ -54,13 +59,12 @@
   :prefix "windows-path-"
   :group 'files)
 
-
-(defvar windows-path-cygdrive-prefix ""
-  "Prefix for the \"/cygdrive/X/\" style of cygwin.
-A cygwin-user can change the \"/cygdrive\" to whatever he wants to access
+(defvar windows-path-mount-prefix ""
+  "Prefix for the mount point of Windows file system.
+A cygwin-user can change the \"/mount\" to whatever he wants to access
 files at MS-DOS drives. For example many people seem to like to have the
 drives accessible as a directory so that c: == /c, which means the
-cygdrive-prefix is \"/\" instead of \"/cygdrive\". This prefix must end
+mount-prefix is \"/\" instead of \"/mount\". This prefix must end
 with a '/'!  Do not set this variable because the value of this variable is
 determined at activation-time of windows-path \(see
 `windows-path-activate')")
@@ -84,21 +88,21 @@ determined at activation-time of windows-path \(see
 ;; `(expand-file-name ".." "c:/")' will trigger `(windows-path-convert-file-name
 ;; "..")' and `(windows-path-convert-file-name "c:/")' to be called.
 (defun windows-path-convert-file-name (name)
-  "Convert file NAME, to cygwin style.
-`x:/' to `/cygdrive/x/'.
-NOTE: \"/cygdrive/\" is only an example for the cygdrive-prefix \(see
-`windows-path-cygdrive-prefix')."
+  "Convert file NAME, to Unix style.
+`x:/' to `/mount/x/'.
+NOTE: \"/mount/\" is only an example for the mount-prefix \(see
+`windows-path-mount-prefix')."
   (cond ((string-match windows-path-style1-regexp name)
          (setq filename
-               (replace-match (concat windows-path-cygdrive-prefix
+               (replace-match (concat windows-path-mount-prefix
                                       (downcase (substring (match-string 2 name) 0 1)))
                               t nil name 2))
          (while (string-match "\\\\" filename)
            (setq filename
                  (replace-match "/" t nil filename)))
-         filename) 
+         filename)
         ((string-match windows-path-style2-regexp name)
-         (replace-match (concat windows-path-cygdrive-prefix
+         (replace-match (concat windows-path-mount-prefix
                                 (downcase (substring (match-string 2 name) 0 1)))
                         t nil name 2))
 
@@ -106,6 +110,7 @@ NOTE: \"/cygdrive/\" is only an example for the cygdrive-prefix \(see
 
 ;; (string-match windows-path-style2-regexp "/sd/c:/xpd/file.txt")
 ;; (windows-path-convert-file-name "sd/c:/xpd/file.txt")
+;; (windows-path-convert-file-name "c:/xpd/file.txt")
 ;; (windows-path-convert-file-name "~/path/c:/sds/")
 ;; (windows-path-convert-file-name "/c:/sds/")
 ;; (windows-path-convert-file-name "/sd/c:\\sds\\")
@@ -118,8 +123,8 @@ OPERATION with the mapped filename\(s). NAME must have the format looks like
 element of ARGS could be a filename too \(then it must have the same syntax
 like NAME!) which must be converted \(e.g. `expand-file-name' can be called
 with two filenames).
-NOTE: \"/cygdrive/\" is only an example for the cygdrive-prefix \(see
-`windows-path-cygdrive-prefix')."
+NOTE: \"/mount/\" is only an example for the mount-prefix \(see
+`windows-path-mount-prefix')."
   (windows-path-run-real-handler
    operation
    (cons (windows-path-convert-file-name name)
@@ -134,30 +139,26 @@ NOTE: \"/cygdrive/\" is only an example for the cygdrive-prefix \(see
 (defun windows-path-activate ()
   "Activate windows-path-style-handling."
   (interactive)
-  (if (not (eq system-type 'cygwin))
-      (message "windows-path is only available for Emacs for Cygwin.")
+  (unless windows-path-activated
+    (setq windows-path-mount-prefix
+          (if (eq system-type 'cygwin)
+              (cygwin-mount-get-cygdrive-prefix)
+            "/mnt"))
 
-    (unless windows-path-activated
-      
-      (setq windows-path-cygdrive-prefix
-            (cygwin-mount-get-cygdrive-prefix))
-
-      (add-to-list 'file-name-handler-alist
-                   (cons windows-path-style1-regexp
-                         'windows-path-map-drive-hook-function))
-      (add-to-list 'file-name-handler-alist
-                   (cons windows-path-style2-regexp
-                         'windows-path-map-drive-hook-function))
-      (setq windows-path-activated t))))
+    (add-to-list 'file-name-handler-alist
+                 (cons windows-path-style1-regexp
+                       'windows-path-map-drive-hook-function))
+    (add-to-list 'file-name-handler-alist
+                 (cons windows-path-style2-regexp
+                       'windows-path-map-drive-hook-function))
+    (setq windows-path-activated t)))
 
 (defun windows-path-deactivate ()
   "Deactivate windows-style-path handling."
   (interactive)
-  (if (not (eq system-type 'cygwin))
-      (message "windows-path is only available for Emacs for Cygwin!")
-    (unless (not windows-path-activated)
-      
-      (setq windows-path-cygdrive-prefix "")
+  (unless (not windows-path-activated)
+
+      (setq windows-path-mount-prefix "")
 
       (setq file-name-handler-alist
             (delete (assoc windows-path-style1-regexp file-name-handler-alist)
@@ -165,8 +166,8 @@ NOTE: \"/cygdrive/\" is only an example for the cygdrive-prefix \(see
       (setq file-name-handler-alist
             (delete (assoc windows-path-style2-regexp file-name-handler-alist)
                     file-name-handler-alist))
-      
-      (setq windows-path-activated nil))))
+
+      (setq windows-path-activated nil)))
 
 (provide 'windows-path)
 
