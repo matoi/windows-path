@@ -78,6 +78,7 @@ determined at activation-time of windows-path \(see
         (inhibit-file-name-operation operation))
     (apply operation args)))
 
+(defconst windows-path-style0-regexp "\\`\\(.*/\\)?\"\\([a-zA-Z]:\\)\\\\.*\"")
 (defconst windows-path-style1-regexp "\\`\\(.*/\\)?\\([a-zA-Z]:\\)\\\\")
 (defconst windows-path-style2-regexp "\\`\\(.*/\\)?\\([a-zA-Z]:\\)/")
 
@@ -92,7 +93,13 @@ determined at activation-time of windows-path \(see
 `x:/' to `/mount/x/'.
 NOTE: \"/mount/\" is only an example for the mount-prefix \(see
 `windows-path-mount-prefix')."
-  (cond ((string-match windows-path-style1-regexp name)
+  (cond ((string-match windows-path-style0-regexp name)
+         (while (string-match "\"" name) ; remove quote
+           (setq name
+                 (replace-match "" t nil name)))
+         (windows-path-convert-file-name name))
+
+        ((string-match windows-path-style1-regexp name)
          (setq filename
                (replace-match (concat windows-path-mount-prefix
                                       (downcase (substring (match-string 2 name) 0 1)))
@@ -113,7 +120,8 @@ NOTE: \"/mount/\" is only an example for the mount-prefix \(see
 ;; (windows-path-convert-file-name "c:/xpd/file.txt")
 ;; (windows-path-convert-file-name "~/path/c:/sds/")
 ;; (windows-path-convert-file-name "/c:/sds/")
-;; (windows-path-convert-file-name "/sd/c:\\sds\\")
+;; (windows-path-convert-file-name "~/emacs/C:\\Users\\CommonProps.properties")
+;; (windows-path-convert-file-name "~/emacs/\"C:\\Users\\test.t\"")
 
 (defun windows-path-map-drive-hook-function (operation name &rest args)
   "Run OPERATION on cygwin NAME with ARGS.
@@ -133,8 +141,8 @@ NOTE: \"/mount/\" is only an example for the mount-prefix \(see
 				   (cdr args))
 		   args))))
 
-
-(defvar windows-path-activated nil)
+(defvar windows-path-activated nil
+  "This is a global varialbe indicating if windows-path is active.")
 
 (defun windows-path-activate ()
   "Activate windows-path-style-handling."
@@ -144,7 +152,9 @@ NOTE: \"/mount/\" is only an example for the mount-prefix \(see
           (if (eq system-type 'cygwin)
               (cygwin-mount-get-cygdrive-prefix)
             "/mnt"))
-
+    (add-to-list 'file-name-handler-alist
+                 (cons windows-path-style0-regexp
+                       'windows-path-map-drive-hook-function))
     (add-to-list 'file-name-handler-alist
                  (cons windows-path-style1-regexp
                        'windows-path-map-drive-hook-function))
@@ -157,16 +167,16 @@ NOTE: \"/mount/\" is only an example for the mount-prefix \(see
   "Deactivate windows-style-path handling."
   (interactive)
   (unless (not windows-path-activated)
-
       (setq windows-path-mount-prefix "")
-
+      (setq file-name-handler-alist
+            (delete (assoc windows-path-style0-regexp file-name-handler-alist)
+                    file-name-handler-alist))
       (setq file-name-handler-alist
             (delete (assoc windows-path-style1-regexp file-name-handler-alist)
                     file-name-handler-alist))
       (setq file-name-handler-alist
             (delete (assoc windows-path-style2-regexp file-name-handler-alist)
                     file-name-handler-alist))
-
       (setq windows-path-activated nil)))
 
 (provide 'windows-path)
