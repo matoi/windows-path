@@ -100,14 +100,14 @@ NOTE: \"/mount/\" is only an example for the mount-prefix \(see
          (windows-path-convert-file-name name))
 
         ((string-match windows-path-style1-regexp name)
-         (setq filename
+         (setq name
                (replace-match (concat windows-path-mount-prefix
                                       (downcase (substring (match-string 2 name) 0 1)))
                               t nil name 2))
-         (while (string-match "\\\\" filename)
-           (setq filename
-                 (replace-match "/" t nil filename)))
-         filename)
+         (while (string-match "\\\\" name)
+           (setq name
+                 (replace-match "/" t nil name)))
+         name)
         ((string-match windows-path-style2-regexp name)
          (replace-match (concat windows-path-mount-prefix
                                 (downcase (substring (match-string 2 name) 0 1)))
