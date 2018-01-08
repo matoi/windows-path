@@ -1,4 +1,4 @@
-;;; windows-path.el -- Teach cygwin/WSL EMACS about Windows file system
+;;; windows-path.el --- Teach cygwin/WSL EMACS about Windows file system
 
 ;; Copyright (C) 2009 Victor Ren
 ;;
@@ -8,6 +8,7 @@
 ;; Version:0.1
 ;; X-URL: https://www.emacswiki.org/emacs/windows-path.el
 ;;        https://github.com/victorhge/windows-path
+;; Package-Requires: (cygwin-mount)
 
 ;; This file is *NOT* (yet) part of GNU Emacs.
 ;;
@@ -49,6 +50,7 @@
 ;; those names into Unix style.
 
 ;;; Code:
+
 (if (eq system-type 'cygwin)
     (require 'cygwin-mount))
 
